@@ -201,9 +201,54 @@ module Control(OpCode, Funct, IRQ,
                     PCSrc = 3'b000;
                     Branch = 1;
                     RegWrite = 0;
+                    MemRead = 0;
                     MemWrite = 0;
                     ALUSrc1 = 0;
                     ALUSrc2 = 0;
+                end
+                6'h05:begin // bne
+                    PCSrc = 3'b000;
+                    Branch = 1;
+                    RegWrite = 0;
+                    MemRead = 0;
+                    MemWrite = 0;
+                    ALUSrc1 = 0;
+                    ALUSrc2 = 0;
+                    ExtOp = 1;
+                    LuOp = 0;
+                end
+                6'h06:begin // blez
+                    PCSrc = 3'b000;
+                    Branch = 1;
+                    RegWrite = 0;
+                    MemRead = 0;
+                    MemWrite = 0;
+                    ALUSrc1 = 0;
+                    ALUSrc2 = 0;
+                    ExtOp = 1;
+                    LuOp = 0;
+                end
+                6'h07: begin // bgtz
+                    PCSrc = 3'b000;
+                    Branch = 1;
+                    RegWrite = 0;
+                    MemRead = 0;
+                    MemWrite = 0;
+                    ALUSrc1 = 0;
+                    ALUSrc2 = 0;
+                    ExtOp = 1;
+                    LuOp = 0;
+                end
+                6'h01: begin // bltz
+                    PCSrc = 3'b000;
+                    Branch = 1;
+                    RegWrite = 0;
+                    MemRead = 0;
+                    MemWrite = 0;
+                    ALUSrc1 = 0;
+                    ALUSrc2 = 0;
+                    ExtOp = 1;
+                    LuOp = 0;
                 end
                 6'h02:begin // j
                     PCSrc = 1;
@@ -227,7 +272,7 @@ module Control(OpCode, Funct, IRQ,
 	
 	assign ALUOp[2:0] = 
 		(OpCode == 6'h00)? 3'b010: 
-		(OpCode == 6'h04)? 3'b001: 
+		(OpCode == 6'h04 || OpCode == 6'h05  || OpCode == 6'h01 || OpCode == 6'h06 || OpCode == 6'h07 )? 3'b001: 
 		(OpCode == 6'h0c)? 3'b100: 
 		(OpCode == 6'h0a || OpCode == 6'h0b)? 3'b101: 
 		3'b000;
