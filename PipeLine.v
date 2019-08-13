@@ -20,8 +20,10 @@
 //////////////////////////////////////////////////////////////////////////////////
 
 
-module PipeLine(clk, reset);
+module PipeLine(clk, reset, cathodes);
 	input clk,reset;
+	output wire [7:0] cathodes;
+	
 	
 	// Timing logic
 	//IF
@@ -29,7 +31,10 @@ module PipeLine(clk, reset);
 	reg [31:0] PC_next;
 	reg [2:0] PCSrc_IDEX;
 	reg IFID_Flush;
-	
+	reg PC_Hold;
+    reg IFID_Hold;
+    reg Control_Hazard;
+	assign cathodes = PC[7:0];
 	reg IRQ;
 	wire [31:0] ILLOP;
 	assign ILLOP = 32'h80000004;
@@ -86,8 +91,11 @@ module PipeLine(clk, reset);
 			
 //		else if(PCSrc)
 //		    PC <= 32'd0;
-		else
-			PC <= PC_next;
+		else begin
+			if(~PC_Hold) 
+				PC <= PC_next;
+			// PCHold here
+		end
 	end 
 	
     wire Zero;
@@ -97,23 +105,53 @@ module PipeLine(clk, reset);
 	InstructionMemory instruction_memory1(.Address(PC), .Instruction(Instruction));
 	
 	reg [31:0] Ins_IFID;
+	wire is_lw;
+	wire [4:0] lw_target;
+	reg is_lw_IDEX;
+	reg [4:0] lw_target_IDEX;
+	assign is_lw = (Ins_IFID[31:26] == 6'h23) ? 1 : 0;
+	assign lw_target = Ins_IFID[20:16];
+	
+	wire Load_use;
+	assign Load_use = (is_lw_IDEX & (lw_target_IDEX == Ins_IFID[25:21] | lw_target_IDEX == Ins_IFID[20:16])) ? 1 : 0;
+	// load use hazard and stall the pipeline
+	
+	
+	always @(*)begin
+		if (reset | ~Load_use ) begin
+			PC_Hold = 0;
+			IFID_Hold = 0;
+			Control_Hazard = 0;
+		end
+		else begin
+			if(Load_use) begin
+				PC_Hold = 1;
+				IFID_Hold = 1;
+				//Control_Hazard = 1;
+			end
+			
+		end
+	end
+	
+	
+	
 	reg [31:0] PC_Plus4_IFID;
 	always @(posedge clk or posedge reset) begin
-	   if (reset) begin
+	   if (reset | IFID_Flush) begin
 		  Ins_IFID <= 32'h000000;
 		  PC_Plus4_IFID <= 32'h00000000;
 		  
 		  
 		  end
         else begin
-          if( ~IFID_Flush) begin
+          if( ~IFID_Flush & ~IFID_Hold) begin
             Ins_IFID <= Instruction;
             PC_Plus4_IFID <= PC + 4;
           end
-		  else begin
-		      Ins_IFID <= 32'h00000000;
-		      PC_Plus4_IFID <= 32'h00000000;
-		  end
+		  // else begin
+		      // Ins_IFID <= 32'h00000000;
+		      // PC_Plus4_IFID <= 32'h00000000;
+		  // end
 		
 		  end
 	end 
@@ -121,7 +159,7 @@ module PipeLine(clk, reset);
 	Control control1(//control signals
 		.OpCode(Ins_IFID[31:26]), .Funct(Ins_IFID[5:0]), .IRQ(IRQ),
 		.PCSrc(PCSrc), .Branch(Branch), .RegWrite(RegWrite), .RegDst(RegDst), 
-		.MemRead(MemRead),	.MemWrite(MemWrite), .MemtoReg(MemtoReg),
+		.MemRead(MemRead), .MemWrite(MemWrite), .MemtoReg(MemtoReg),
 		.ALUSrc1(ALUSrc1), .ALUSrc2(ALUSrc2), .ExtOp(ExtOp), .LuOp(LuOp), .ALUOp(ALUOp));
 	
 	reg [4:0] Write_register_IDEX;
@@ -172,9 +210,11 @@ module PipeLine(clk, reset);
         end
 	end
 //    assign EXMEM_Flush = (PCSrc == 0) ? 0 : 1;
-	
+	reg [5:0] OpCode_IDEX;
 	always @(posedge clk or posedge reset)begin
-	   if(reset | IDEX_Flush)begin
+//	   if(reset | IDEX_Flush | Control_Hazard)begin
+	   
+	    if(reset | IDEX_Flush | Control_Hazard)begin
             PCSrc_IDEX = 0;
             Branch_IDEX = 0;
             PC_Plus4_IDEX = 32'h00000000;
@@ -196,8 +236,11 @@ module PipeLine(clk, reset);
             Imm_IDEX = 0;
             Databus1_IDEX = 0;
             Write_register_IDEX = 0;
+			is_lw_IDEX = 0;
+			lw_target_IDEX = 0;
+			OpCode_IDEX = 0;
 	   end
-	   else if(~IDEX_Flush)begin
+	   else if (~IDEX_Flush)begin
             RegDst_IDEX <= RegDst;
             MemRead_IDEX <= MemRead;
             MemtoReg_IDEX <= MemtoReg;
@@ -224,6 +267,9 @@ module PipeLine(clk, reset);
             Jump_target_IDEX <= Jump_target;
             PC_Plus4_IDEX <= PC_Plus4_IFID;
             Write_register_IDEX <= Write_register;
+			is_lw_IDEX <= is_lw;
+			lw_target_IDEX <= lw_target;
+			OpCode_IDEX <= Ins_IFID[31:26];
 		end
 	end 
 	
@@ -270,7 +316,7 @@ module PipeLine(clk, reset);
 	assign ALU_in2_target = ALUSrc2_IDEX? LU_out: Databus2_IDEX;
 	assign ALU_in2 = (Databus2_Forw == 2'b10) ? Databus3 : (Databus2_Forw == 2'b01)? ALU_out_EXMEM : ALU_in2_target; 
 	
-	ALU alu1(.in1(ALU_in1), .in2(ALU_in2), .ALUCtl(ALUCtl),
+	ALU alu1(.in1(ALU_in1), .in2(ALU_in2), .ALUCtl(ALUCtl), .OpCode_IDEX(OpCode_IDEX),
 	.Sign(Sign), .out(ALU_out), .zero(Zero));
 	
 	reg [31:0] Branch_target;
