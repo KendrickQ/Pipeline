@@ -24,6 +24,10 @@ module PipeLine(clk, reset, cathodes);
 	input clk,reset;
 	output wire [7:0] cathodes;
 	
+	reg [31:0] Ins_IDEX;
+	reg [31:0] Ins_EXMEM;
+	reg [31:0] Ins_MEMWB;
+	
 	
 	// Timing logic
 	//IF
@@ -239,6 +243,7 @@ module PipeLine(clk, reset, cathodes);
 			is_lw_IDEX = 0;
 			lw_target_IDEX = 0;
 			OpCode_IDEX = 0;
+			Ins_IDEX = 0;
 	   end
 	   else if (~IDEX_Flush)begin
             RegDst_IDEX <= RegDst;
@@ -270,6 +275,7 @@ module PipeLine(clk, reset, cathodes);
 			is_lw_IDEX <= is_lw;
 			lw_target_IDEX <= lw_target;
 			OpCode_IDEX <= Ins_IFID[31:26];
+			Ins_IDEX <= Ins_IFID;
 		end
 	end 
 	
@@ -283,7 +289,9 @@ module PipeLine(clk, reset, cathodes);
 	  .Read_register1(Rs_IDEX),. Read_register2(Rt_IDEX),
 	  .Write_Register_EXMEM(Write_register_EXMEM),. Write_Register_MEMWB(Write_register_MEMWB)
 	);
-	
+//    assign Databus1_Forw = 0;
+//    assign Databus2_Forw = 0;
+    	
 	
 	//EX
 	reg MemWrite_EXMEM;
@@ -313,8 +321,10 @@ module PipeLine(clk, reset, cathodes);
 	
 	assign ALU_in1_target = ALUSrc1_IDEX? {17'h00000, Shamt_IDEX}: Databus1_IDEX;
 	assign ALU_in1 = (Databus1_Forw == 2'b10) ? Databus3 : (Databus1_Forw == 2'b01)? ALU_out_EXMEM : ALU_in1_target; 
-	assign ALU_in2_target = ALUSrc2_IDEX? LU_out: Databus2_IDEX;
-	assign ALU_in2 = (Databus2_Forw == 2'b10) ? Databus3 : (Databus2_Forw == 2'b01)? ALU_out_EXMEM : ALU_in2_target; 
+//	assign ALU_in2_target = ALUSrc2_IDEX? LU_out: Databus2_IDEX;
+//	assign ALU_in2 = (Databus2_Forw == 2'b10) ? Databus3 : (Databus2_Forw == 2'b01)? ALU_out_EXMEM : ALU_in2_target; 
+	assign ALU_in2_target =  (Databus2_Forw == 2'b10) ? Databus3 : (Databus2_Forw == 2'b01)? ALU_out_EXMEM : Databus2_IDEX;
+	assign ALU_in2 = ALUSrc2_IDEX ? LU_out : ALU_in2_target;
 	
 	ALU alu1(.in1(ALU_in1), .in2(ALU_in2), .ALUCtl(ALUCtl), .OpCode_IDEX(OpCode_IDEX),
 	.Sign(Sign), .out(ALU_out), .zero(Zero));
@@ -350,19 +360,22 @@ module PipeLine(clk, reset, cathodes);
             Databus2_EXMEM = 0;
             PC_Plus4_EXMEM = 0;
             Write_register_EXMEM = 0;
+            Ins_EXMEM = 0;
 	   end
 	   else if(~EXMEM_Flush)begin
             MemWrite_EXMEM <= MemWrite_IDEX;
             MemRead_EXMEM <= MemRead_IDEX;
             MemtoReg_EXMEM <= MemtoReg_IDEX;
             ALU_out_EXMEM <= ALU_out;
-            Databus2_EXMEM <= Databus2_IDEX;
+//            Databus2_EXMEM <= Databus2_IDEX;
+            Databus2_EXMEM <= ALU_in2_target;
             PC_Plus4_EXMEM <= PC_Plus4_IDEX;
             RegWrite_EXMEM <= RegWrite_IDEX;
             RegDst_EXMEM <= RegDst_IDEX;
             Rt_EXMEM <= Rt_IDEX;
             Rd_EXMEM <= Rd_IDEX;
             Write_register_EXMEM <= Write_register_IDEX;
+            Ins_EXMEM <= Ins_IDEX;
 		end
 		else begin
             MemWrite_EXMEM <= 0;
@@ -376,6 +389,7 @@ module PipeLine(clk, reset, cathodes);
             Rt_EXMEM <= 0;
             Rd_EXMEM <= 0;
             Write_register_EXMEM <= 0;
+            Ins_EXMEM <= 0;
 		end
 	end 
 	//MEM
@@ -394,7 +408,7 @@ module PipeLine(clk, reset, cathodes);
 	reg [4:0] Rt_MEMWB;
 	reg [4:0] Rd_MEMWB;
 	
-	always @(negedge clk)begin
+	always @(posedge clk or posedge reset)begin
 	   if(reset)begin
             MemtoReg_MEMWB = 0;
             Read_data_MEMWB = 0;
@@ -403,6 +417,7 @@ module PipeLine(clk, reset, cathodes);
             RegWrite_MEMWB = 0;
             RegDst_MEMWB = 0;
             Write_register_MEMWB = 0;
+            Ins_MEMWB = 0;
 	   end
 	   else begin
             MemtoReg_MEMWB <= MemtoReg_EXMEM;
@@ -414,6 +429,7 @@ module PipeLine(clk, reset, cathodes);
             Rt_MEMWB <= Rt_EXMEM;
             Rd_MEMWB <= Rd_EXMEM;
             Write_register_MEMWB <= Write_register_EXMEM;
+            Ins_MEMWB <= Ins_EXMEM;
 		end
 	end
 	//WB

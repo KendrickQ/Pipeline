@@ -3,28 +3,6 @@
 // Company: 
 // Engineer: 
 // 
-// Create Date: 2019/08/11 14:02:48
-// Design Name: 
-// Module Name: Forwarding
-// Project Name: 
-// Target Devices: 
-// Tool Versions: 
-// Description: 
-// 
-// Dependencies: 
-// 
-// Revision:
-// Revision 0.01 - File Created
-// Additional Comments:
-// 
-//////////////////////////////////////////////////////////////////////////////////
-
-
-`timescale 1ns / 1ps
-//////////////////////////////////////////////////////////////////////////////////
-// Company: 
-// Engineer: 
-// 
 // Create Date: 2019/08/11 10:52:45
 // Design Name: 
 // Module Name: forwarding
@@ -77,6 +55,7 @@ module Forwarding(
 			else if ( RegWrite_MEMWB & (Write_Register_MEMWB == Read_register2) & (Write_Register_MEMWB != 0) & ( Read_register2 != Write_Register_EXMEM | ~RegWrite_EXMEM))
 				Databus2_Forw = 2;
 			else Databus2_Forw = 0;
+			
 		end
 	end
 endmodule
